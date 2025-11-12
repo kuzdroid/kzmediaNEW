@@ -54,7 +54,7 @@
             <button id="btnLogin">Giriş</button>
           </div>
           <div class="small-muted" style="margin-top:8px">
-          <code>OWNER_CODE</code>         KZYAPTI ÇALMAYIN XD.
+          <code>OWNER_CODE</code> KZ YAPTI ÇALMAYIN XD.
           </div>
         </div>
 
@@ -102,17 +102,6 @@
         <div>
           <h4>Kullanıcıları Yönet</h4>
           <div id="userList"></div>
-        </div>
-        <hr>
-        <div>
-          <label>Kullanıcı takipçi sayısını değiştir</label>
-          <div class="row" style="margin-top:6px">
-            <input id="adminUserFollowers" placeholder="kullaniciadi" class="field-inline">
-            <input id="adminFollowerCount" placeholder="yeni sayı" style="width:90px">
-          </div>
-          <div style="margin-top:8px">
-            <button id="btnSetFollowers" class="btn-primary">Uygula</button>
-          </div>
         </div>
       </div>
       <div id="adBox" style="margin-top:12px"></div>
@@ -170,7 +159,7 @@
       const pass = $('txtPass').value;
       if(!name){ alert('Kullanıcı adı girin'); return;}
       if(DATA.users[name]){ alert('Bu kullanıcı adı zaten var'); return;}
-      DATA.users[name]={ pass:pass||'', roles:[], followers:0 };
+      DATA.users[name]={ pass:pass||'', roles:[], followers:0, likedPosts:[] };
       if(pass===OWNER_CODE){ DATA.users[name].roles.push('ADMIN','KUZILER'); }
       saveData(); alert('Kayıt tamam. Giriş yapabilirsiniz.');
     });
@@ -236,19 +225,35 @@
         const canEdit = window._ME && (window._ME.name===p.author || isAdmin);
         const tag = (DATA.users[p.author]?.roles?.includes('KUZILER')) ? '<span class="tag">@KUZILER</span>' : '';
 
+        const meUser = window._ME ? DATA.users[window._ME.name] : null;
+        const liked = !!(meUser?.likedPosts && meUser.likedPosts.includes(p.id));
+        const likeLabel = `❤ ${p.likes||0}${liked?' • Beğendin':''}`;
+
         div.innerHTML = `
           <div class="meta"><div class="who">${escapeHtml(p.author)} ${tag}</div><div class="small">${new Date(p.createdAt).toLocaleString()}</div></div>
           <div>${escapeHtml(p.text)}</div>
           ${p.imageUrl?`<div><img src="${escapeHtml(p.imageUrl)}" alt=""></div>`:''}
           ${p.videoUrl?`<div><video controls src="${escapeHtml(p.videoUrl)}"></video></div>`:''}
           <div style="margin-top:8px" class="row">
-            <button class="btn-like">❤ ${p.likes||0}</button>
+            <button class="btn-like" ${liked ? 'disabled title="Zaten beğendiniz"' : ''}>${likeLabel}</button>
             ${canEdit?'<button class="btn-edit">Düzenle</button>':''}
             ${canEdit?'<button class="btn-del">Sil</button>':''}
           </div>`;
         feed.appendChild(div);
         shown++;
-        div.querySelector('.btn-like')?.addEventListener('click',()=>{ p.likes++; saveData(); loadFeed(); });
+        div.querySelector('.btn-like')?.addEventListener('click',()=>{
+          if(!window._ME){alert('Önce giriş yapın');return;}
+          const meUser = DATA.users[window._ME.name];
+          if(!meUser.likedPosts) meUser.likedPosts = [];
+          if(meUser.likedPosts.includes(p.id)){
+            alert('Bu gönderiyi zaten beğendiniz.');
+            return;
+          }
+          meUser.likedPosts.push(p.id);
+          p.likes++;
+          saveData();
+          loadFeed();
+        });
         if(canEdit){
           div.querySelector('.btn-edit')?.addEventListener('click',()=>{
             const newText=prompt('Yeni metin:',p.text);
@@ -266,7 +271,7 @@
     }
 
     function escapeHtml(s=''){
-      return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',''':'&#39;'}[c]));
     }
 
     $('btnSaveAd')?.addEventListener('click',()=>{
@@ -275,16 +280,6 @@
     });
     $('btnClearAd')?.addEventListener('click',()=>{
       if(!checkAdmin()) return; DATA.ad=''; saveData(); renderAd();
-    });
-
-    $('btnSetFollowers')?.addEventListener('click',()=>{
-      if(!checkAdmin()) return;
-      const name=$('adminUserFollowers').value.trim();
-      const cnt=parseInt($('adminFollowerCount').value);
-      if(!name||!DATA.users[name]) return alert('Kullanıcı bulunamadı');
-      if(Number.isNaN(cnt)) return alert('Geçerli sayı girin');
-      DATA.users[name].followers=cnt; saveData(); alert('Ayar kaydedildi');
-      if(window._ME && window._ME.name===name) setMe(name);
     });
 
     function renderAd(){
@@ -298,30 +293,17 @@
       return true;
     }
 
-    function renderUsers(){
-      const list=$('userList'); if(!list) return;
-      list.innerHTML='';
-      for(const name in DATA.users){
-        const u=DATA.users[name];
-        const div=document.createElement('div');
-        div.className='row user-row';
-        const isAdmin=u.roles?.includes('ADMIN');
-        div.innerHTML=`
-          <span>${name}${isAdmin?'@ADMIN':''}</span>
-          <button class="btn-primary btn-make-admin">Admin Yap</button>`;
-        div.querySelector('.btn-make-admin').addEventListener('click',()=>{
-          if(!checkAdmin()) return;
-          if(!u.roles) u.roles=[];
-          if(!u.roles.includes('ADMIN')) u.roles.push('ADMIN');
-          saveData(); renderUsers(); alert(name+' artık admin!');
-        });
-        list.appendChild(div);
-      }
-    }
-
     (function startup(){
       if(!DATA.users['owner'])
-        DATA.users['owner']={pass:OWNER_CODE,roles:['ADMIN','KUZILER'],followers:0};
+        DATA.users['owner']={pass:OWNER_CODE,roles:['ADMIN','KUZILER'],followers:0,likedPosts:[]};
+
+      const kuzilerSeed=['MR.Selim@kuziler','elalye@kuziler','sena@kuziler','kursatomer@kuziler'];
+      kuzilerSeed.forEach(uName=>{
+        if(!DATA.users[uName]){
+          DATA.users[uName]={pass:'KUZİLER',roles:['KUZILER'],followers:0,likedPosts:[]};
+        }
+      });
+
       saveData();
       setMe(null);
     })();
